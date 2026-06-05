@@ -1,5 +1,4 @@
-#include "common.hpp"
-#include <cstdio>
+#include "coc.hpp"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -8,6 +7,6 @@ int WINAPI WinMain([[maybe_unused]] HINSTANCE hInstance, [[maybe_unused]] HINSTA
 #else
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const argv[]) {
 #endif
-	std::printf("Hello World!\n");
+	ExamplePublicEngineFunction();
 	return 0;
 }

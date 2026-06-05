@@ -11,13 +11,11 @@ WAYLAND_SOURCE := $(WAYLAND_PROTOCOLS:$(WAYLAND_PROTOCOL_DIR)/%.xml=.wayland/%.c
 WAYLAND_HEADERS := $(WAYLAND_SOURCE:.c=.h)
 WAYLAND_OBJ := $(WAYLAND_SOURCE:.c=.o)
 LIB_WAYLAND := libwayland-protocols.a
+EXE :=
 CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client wayland-cursor vulkan)
 LIBS := $(shell pkg-config --libs wayland-client wayland-cursor vulkan)
 else
-WAYLAND_PROTOCOL_DIR :=
-WAYLAND_SOURCE :=
-WAYLAND_HEADERS :=
-WAYLAND_OBJ :=
+EXE := .exe
 CXXFLAGS_LIBS :=
 LIBS := -lkernel32 -luser32 -lgdi32
 endif
@@ -42,12 +40,12 @@ DEP_GAME := $(OBJ_GAME:.o=.d)
 .PHONY: run all clean clean-wayland
 
 run: all
-	./game
+	./game$(EXE)
 
-all: libengine.a game
+all: libengine.a game$(EXE)
 
 clean:
-	$(RM) -r .build libengine.a game
+	$(RM) -r .build libengine.a game$(EXE)
 
 clean-wayland:
 	$(RM) -r .wayland libwayland-protocols.a
@@ -63,7 +61,7 @@ LIB_WAYLAND_PROTOCOLS := libwayland-protocols.a
 else
 LIB_WAYLAND_PROTOCOLS :=
 endif
-game: libengine.a $(LIB_WAYLAND_PROTOCOLS) $(OBJ_GAME)
+game$(EXE): $(OBJ_GAME) $(LIB_WAYLAND_PROTOCOLS) libengine.a
 	$(CXX) $(CXXFLAGS) $(LIBS) $^ -o $@
 	@chmod +x $@
 
