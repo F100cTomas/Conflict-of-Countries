@@ -1,6 +1,6 @@
 #include "common/common.hpp"
-#include <stdlib.h>
+#include <cstdlib>
 
-void ExampleLinuxSpecificFunction() {
-    system("notify-send 'Hello' 'Hello from Linux'");
+void ExampleOSSpecificFunction() {
+		system("notify-send 'Hello' 'Hello from Linux'");
 }
