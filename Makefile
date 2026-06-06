@@ -20,7 +20,7 @@ CXXFLAGS_LIBS :=
 ifneq ($(UI),TerminalUI)
 SUBSYSTEM := -mwindows
 endif
-LDFLAGS := -lkernel32 -luser32 -lgdi32 $(SUBSYSTEM)
+LDFLAGS := -lkernel32 -luser32 -lgdi32 $(SUBSYSTEM) -static-libgcc -static-libstdc++ -static
 endif
 ifeq ($(BUILD),debug)
 CXXFLAGS := -Wall -Wextra -g3 -O0 -DDEBUG -fno-omit-frame-pointer $(CXXFLAGS_BASE)
