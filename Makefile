@@ -1,16 +1,16 @@
-UI := TerminalUI
+UI := GUI
 BUILD := debug
 CXX := clang++
 CC := clang
 
 CXXFLAGS_BASE := -std=c++20 -Iinclude
 ifneq ($(OS),Windows_NT)
-WAYLAND_PROTOCOL_DIR := $(shell pkg-config --variable=pkgdatadir wayland-protocols)
-WAYLAND_PROTOCOLS := $(shell find $(WAYLAND_PROTOCOL_DIR) -name "*.xml")
-WAYLAND_SOURCE := $(WAYLAND_PROTOCOLS:$(WAYLAND_PROTOCOL_DIR)/%.xml=.wayland/%.c)
-WAYLAND_HEADERS := $(WAYLAND_SOURCE:.c=.h)
-WAYLAND_OBJ := $(WAYLAND_SOURCE:.c=.o)
-LIB_WAYLAND := libwayland-protocols.a
+WL_DIR := $(shell pkg-config --variable=pkgdatadir wayland-protocols)
+WL_PROTOCOLS := $(WL_DIR)/stable/xdg-shell/xdg-shell.xml $(WL_DIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+WL_SOURCE := $(WL_PROTOCOLS:$(WL_DIR)/%.xml=.wayland/%.c)
+WL_HEADERS := $(WL_SOURCE:.c=.h)
+WL_OBJ := $(WL_SOURCE:.c=.o)
+LIB_WL := libwayland-protocols.a
 EXE :=
 CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client wayland-cursor vulkan)
 LDFLAGS := $(shell pkg-config --libs wayland-client wayland-cursor vulkan)
@@ -56,20 +56,20 @@ clean-wayland:
 libengine.a: $(OBJ_ENGN)
 	ar rcs $@ $^
 
-libwayland-protocols.a: $(WAYLAND_OBJ)
+libwayland-protocols.a: $(WL_OBJ)
 	ar rcs $@ $^
 
 ifneq ($(OS),Windows_NT)
-LIB_WAYLAND_PROTOCOLS := libwayland-protocols.a
+LIB_WL_PROTOCOLS := libwayland-protocols.a
 else
-LIB_WAYLAND_PROTOCOLS :=
+LIB_WL_PROTOCOLS :=
 endif
-game$(EXE): $(OBJ_GAME) $(LIB_WAYLAND_PROTOCOLS) libengine.a
+game$(EXE): $(OBJ_GAME) libengine.a $(LIB_WL_PROTOCOLS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
 	@chmod +x $@
 
 -include $(DEP_ENGN)
-.build/Engine/%.o: Engine/%.cpp $(WAYLAND_HEADERS)
+.build/Engine/%.o: Engine/%.cpp $(WL_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_LIBS) -IEngine/$(UI) -MMD -MP -c $< -o $@
 
@@ -78,11 +78,11 @@ game$(EXE): $(OBJ_GAME) $(LIB_WAYLAND_PROTOCOLS) libengine.a
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -IGame -MMD -MP -c $< -o $@
 
-.wayland/%.h: $(WAYLAND_PROTOCOL_DIR)/%.xml
+.wayland/%.h: $(WL_DIR)/%.xml
 	@mkdir -p $(dir $@)
 	wayland-scanner client-header $< $@
 
-.wayland/%.c: $(WAYLAND_PROTOCOL_DIR)/%.xml $(WAYLAND_HEADERS)
+.wayland/%.c: $(WL_DIR)/%.xml $(WL_HEADERS)
 	@mkdir -p $(dir $@)
 	wayland-scanner private-code $< $@
 

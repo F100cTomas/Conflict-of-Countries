@@ -7,6 +7,7 @@ int WINAPI WinMain([[maybe_unused]] HINSTANCE hInstance, [[maybe_unused]] HINSTA
 #else
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const argv[]) {
 #endif
-	ExamplePublicEngineFunction();
+	Engine::Engine engine{};
+	engine.mainloop();
 	return 0;
 }

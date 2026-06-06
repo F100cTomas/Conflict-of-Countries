@@ -1,2 +1,9 @@
 #pragma once
-void ExamplePublicEngineFunction();
+namespace Engine {
+class Engine {
+public:
+	Engine();
+	~Engine();
+	void mainloop();
+};
+} // namespace Engine

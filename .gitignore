@@ -1,5 +1,7 @@
+.cache/
 .build/
 .wayland/
 game
 *.a
 *.exe
+compile_commands.json
