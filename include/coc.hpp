@@ -1,9 +1,9 @@
 #pragma once
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 namespace Engine {
-void windows_entry(HINSTANCE hInstance, int nCmdShow);
+extern HINSTANCE hInstance;
+extern int nCmdShow;
 }
 #endif
 namespace Engine {

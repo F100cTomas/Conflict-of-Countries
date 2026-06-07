@@ -1,9 +1,10 @@
 #include "coc.hpp"
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-int WINAPI WinMain([[maybe_unused]] HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstance,
-                   [[maybe_unused]] LPSTR lpCmdLine, [[maybe_unused]] int nCmdShow) {
+int WINAPI wWinMain(HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstance,
+                   [[maybe_unused]] LPWSTR lpCmdLine, int nCmdShow) {
+	Engine::hInstance = hInstance;
+	Engine::nCmdShow = nCmdShow;
 #else
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const argv[]) {
 #endif

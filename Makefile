@@ -16,11 +16,11 @@ CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client wayland-c
 LDFLAGS := $(shell pkg-config --libs wayland-client wayland-cursor vulkan)
 else
 EXE := .exe
-CXXFLAGS_LIBS :=
+CXXFLAGS_LIBS := -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN
 ifneq ($(UI),TerminalUI)
-SUBSYSTEM := -mwindows
+SUBSYSTEM := -mwindows -municode
 endif
-LDFLAGS := -lkernel32 -luser32 -lgdi32 $(SUBSYSTEM) -static-libgcc -static-libstdc++ -static
+LDFLAGS := -l:libvulkan-1.dll.a -lkernel32 -luser32 -lgdi32 $(SUBSYSTEM) -static-libgcc -static-libstdc++ -static
 endif
 ifeq ($(BUILD),debug)
 CXXFLAGS := -Wall -Wextra -g3 -O0 -DDEBUG -fno-omit-frame-pointer $(CXXFLAGS_BASE)
@@ -65,7 +65,7 @@ else
 LIB_WL_PROTOCOLS :=
 endif
 game$(EXE): $(OBJ_GAME) libengine.a $(LIB_WL_PROTOCOLS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
 	@chmod +x $@
 
 -include $(DEP_ENGN)
