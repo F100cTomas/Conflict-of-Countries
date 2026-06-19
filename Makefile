@@ -45,7 +45,7 @@ DEP_GAME := $(OBJ_GAME:.o=.d)
 run: all
 	./game$(EXE)
 
-all: libengine.a game$(EXE)
+all: libengine.a game$(EXE) shader.spv
 
 clean:
 	$(RM) -r .build libengine.a game$(EXE)
@@ -67,6 +67,9 @@ endif
 game$(EXE): $(OBJ_GAME) libengine.a $(LIB_WL_PROTOCOLS)
 	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
 	@chmod +x $@
+
+shader.spv: shader.slang
+	slangc $< -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o $@
 
 -include $(DEP_ENGN)
 .build/Engine/%.o: Engine/%.cpp $(WL_HEADERS)

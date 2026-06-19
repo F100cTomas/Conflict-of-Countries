@@ -3,10 +3,11 @@
 #include <windows.h>
 namespace Engine {
 extern HINSTANCE hInstance;
-extern int nCmdShow;
-}
+extern int       nCmdShow;
+} // namespace Engine
 #endif
 namespace Engine {
+void error(const char* msg);
 class Engine {
 public:
 	Engine();

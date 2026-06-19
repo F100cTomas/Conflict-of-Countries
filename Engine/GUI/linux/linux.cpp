@@ -1,5 +1,6 @@
 #include "linux.hpp"
 #include "coc.hpp"
+#include "common/common.hpp"
 #include "stable/xdg-shell/xdg-shell.h"
 #include "unstable/xdg-decoration/xdg-decoration-unstable-v1.h"
 #include <cstdint>
@@ -8,6 +9,8 @@
 #include <cstring>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_wayland.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 namespace Engine {
@@ -22,35 +25,47 @@ struct wl_surface*                  surface             = nullptr;
 struct xdg_surface*                 surface_xdg         = nullptr;
 struct xdg_toplevel*                toplevel            = nullptr;
 struct zxdg_toplevel_decoration_v1* toplevel_decoration = nullptr;
-struct wl_buffer*                   buffer              = nullptr;
+bool                                is_running = true, will_resize = false;
+uint32_t                            old_width = 0, old_height = 0;
+uint32_t                            width = 1920, height = 1080;
+uint32_t                            scale = 1;
+void                                error(const char* msg) {
+  std::fprintf(stderr, "%s\n", msg);
+  std::abort();
+}
 Engine::Engine() {
-	if (initialized) {
-		std::fprintf(stderr, "Double initialization\n");
-		std::abort();
-	}
+	if (initialized)
+		error("Double initialization");
 	initialized = true;
-	display     = wl_display_connect(nullptr);
-	if (display == nullptr) {
-		std::fprintf(stderr, "Unable to establish wayland connection\n");
-		std::abort();
-	}
+	init_vulkan();
+	display = wl_display_connect(nullptr);
+	if (display == nullptr)
+		error("Failed to establish wayland connection");
 	registry = wl_display_get_registry(display);
+	if (registry == nullptr)
+		error("Failed to create a Wayland registry");
 	wl_registry_add_listener(registry, &registry_listener, nullptr);
 	wl_display_roundtrip(display);
-	if (compositor == nullptr || shm == nullptr || wm_base == nullptr || decoration_manager == nullptr) {
-		std::fprintf(stderr, "Failed to initialize interface from wl_registry\n");
-		std::abort();
-	}
-	surface     = wl_compositor_create_surface(compositor);
+	if (compositor == nullptr || shm == nullptr || wm_base == nullptr || decoration_manager == nullptr)
+		error("Failed to initialize interface from wl_registry\n");
+	surface = wl_compositor_create_surface(compositor);
+	wl_surface_add_listener(surface, &surface_listener, nullptr);
 	surface_xdg = xdg_wm_base_get_xdg_surface(wm_base, surface);
 	xdg_surface_add_listener(surface_xdg, &surface_xdg_listener, nullptr);
-	toplevel            = xdg_surface_get_toplevel(surface_xdg);
+	toplevel = xdg_surface_get_toplevel(surface_xdg);
+	xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
 	toplevel_decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(decoration_manager, toplevel);
 	xdg_toplevel_set_title(toplevel, "Conflict of Countries");
+	VkWaylandSurfaceCreateInfoKHR wayland_surface_info{};
+	wayland_surface_info.sType   = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+	wayland_surface_info.display = display;
+	wayland_surface_info.surface = surface;
+	if (vkCreateWaylandSurfaceKHR(instance, &wayland_surface_info, nullptr, &surface_khr) != VK_SUCCESS)
+		error("Failed to initialize Vulkan surface");
 	wl_surface_commit(surface);
 }
 Engine::~Engine() {
-	wl_buffer_destroy(buffer);
+	deinit_vulkan();
 	zxdg_toplevel_decoration_v1_destroy(toplevel_decoration);
 	xdg_toplevel_destroy(toplevel);
 	xdg_surface_destroy(surface_xdg);
@@ -64,12 +79,19 @@ Engine::~Engine() {
 	initialized = false;
 }
 void Engine::mainloop() {
-	while (wl_display_dispatch(display))
-		;
+	while (is_running && wl_display_dispatch(display)) {
+		if (will_resize) {
+			resize(width * scale, height * scale);
+			old_width  = width;
+			old_height = height;
+			draw(width * scale, height * scale);
+			will_resize = false;
+		}
+	}
 }
 void registry_global([[maybe_unused]] void* data, [[maybe_unused]] struct wl_registry* wl_registry, uint32_t name,
-                     const char* interface, uint32_t version) {
-	std::printf("%d %s %d\n", name, interface, version);
+                     const char* interface, [[maybe_unused]] uint32_t version) {
+	// std::fprintf("%d %s %d\n", name, interface, version);
 	if (std::strcmp(interface, wl_compositor_interface.name) == 0) {
 		compositor =
 		    reinterpret_cast<struct wl_compositor*>(wl_registry_bind(wl_registry, name, &wl_compositor_interface, 6));
@@ -92,39 +114,53 @@ void registry_global([[maybe_unused]] void* data, [[maybe_unused]] struct wl_reg
 }
 void registry_global_remove([[maybe_unused]] void* data, [[maybe_unused]] struct wl_registry* wl_registry,
                             [[maybe_unused]] uint32_t name) {
-	std::fprintf(stderr, "wl_registry listener: global_remove not implemented\n");
-	std::abort();
+	error("wl_registry listener: global_remove not implemented\n");
 }
 void wm_base_ping([[maybe_unused]] void* data, struct xdg_wm_base* xdg_wm_base, uint32_t serial) {
 	xdg_wm_base_pong(xdg_wm_base, serial);
 }
-static int32_t abs(int32_t x) {
-	if (x < 0)
-		return -x;
-	return x;
+void surface_enter([[maybe_unused]] void* data, [[maybe_unused]] struct wl_surface* wl_surface,
+                   [[maybe_unused]] struct wl_output* output) {
+	std::fprintf(stderr, "xdg_surface.wm_capabilities()\n");
 }
-static bool line(int32_t x, int32_t y) {
-	x -= 1920 / 2;
-	y -= 1080 / 2;
-	return abs(-x + 2 * y + 4) < 8;
+void surface_leave([[maybe_unused]] void* data, [[maybe_unused]] struct wl_surface* wl_surface,
+                   [[maybe_unused]] struct wl_output* output) {
+	std::fprintf(stderr, "xdg_surface.wm_capabilities()\n");
 }
-void surface_xdg_configure([[maybe_unused]] void* data, [[maybe_unused]] struct xdg_surface* xdg_surface,
-                           [[maybe_unused]] uint32_t serial) {
-	if (buffer != nullptr)
+void surface_preferred_buffer_scale([[maybe_unused]] void* data, struct wl_surface* wl_surface, int32_t factor) {
+	std::fprintf(stderr, "xdg_surface.preferred_buffer_scale(%d)\n", factor);
+	scale = factor;
+	wl_surface_set_buffer_scale(wl_surface, factor);
+}
+void surface_preferred_buffer_transform([[maybe_unused]] void* data, struct wl_surface* wl_surface,
+                                        uint32_t transform) {
+	std::fprintf(stderr, "xdg_surface.preferred_buffer_transform(%d)\n", transform);
+	wl_surface_set_buffer_transform(wl_surface, transform);
+}
+void surface_xdg_configure([[maybe_unused]] void* data, struct xdg_surface* xdg_surface, uint32_t serial) {
+	// std::fprintf(stderr, "xdg_surface.configure()\n");
+	if (width == old_width || height == old_height)
 		return;
 	xdg_surface_ack_configure(xdg_surface, serial);
-	int fd = memfd_create("Conflict of Countries", MFD_CLOEXEC);
-	ftruncate(fd, 1920 * 1080 * 4);
-	uint32_t* raw =
-	    reinterpret_cast<uint32_t*>(mmap(nullptr, 1920 * 1080 * 4, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
-	struct wl_shm_pool* shm_pool = wl_shm_create_pool(shm, fd, 1920 * 1808 * 4);
-	buffer                       = wl_shm_pool_create_buffer(shm_pool, 0, 1920, 1080, 1920 * 4, WL_SHM_FORMAT_XRGB8888);
-	wl_shm_pool_destroy(shm_pool);
-	wl_surface_attach(surface, buffer, 0, 0);
-	for (uint32_t y = 0; y < 1080; y++)
-		for (uint32_t x = 0; x < 1920; x++)
-			raw[1920 * y + x] = line(x, y) ? 0x00000000 : 0x00FFFFFF;
-	wl_surface_damage_buffer(surface, 0, 0, INT32_MAX, INT32_MAX);
-	wl_surface_commit(surface);
+	will_resize = true;
+}
+void toplevel_configure([[maybe_unused]] void* data, [[maybe_unused]] struct xdg_toplevel* xdg_toplevel, int32_t width,
+                        int32_t height, [[maybe_unused]] struct wl_array* states) {
+	// std::fprintf(stderr, "xdg_surface.configure(%d, %d)\n", width, height);
+	if (width > 0)
+		::Engine::width = width;
+	if (height > 0)
+		::Engine::height = height;
+}
+void toplevel_close([[maybe_unused]] void* data, [[maybe_unused]] struct xdg_toplevel* xdg_toplevel) {
+	is_running = false;
+}
+void toplevel_configure_bounds([[maybe_unused]] void* data, [[maybe_unused]] struct xdg_toplevel* xdg_toplevel,
+                               [[maybe_unused]] int32_t width, [[maybe_unused]] int32_t height) {
+	std::fprintf(stderr, "xdg_surface.configure_bounds(%d, %d)\n", width, height);
+}
+void toplevel_wm_capablities([[maybe_unused]] void* data, [[maybe_unused]] struct xdg_toplevel* xdg_toplevel,
+                             [[maybe_unused]] struct wl_array* capabilities) {
+	std::fprintf(stderr, "xdg_surface.wm_capabilities()\n");
 }
 } // namespace Engine

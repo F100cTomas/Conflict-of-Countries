@@ -1,9 +1,10 @@
 #include "win.hpp"
 #include "coc.hpp"
-#include <windows.h>
+#include "common/common.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <wchar.h>
+#include <windows.h>
 namespace Engine {
 namespace {
 constexpr const wchar_t CLASS_NAME[]      = L"ConflictOfCountries";
@@ -24,6 +25,7 @@ static bool line(int32_t x, int32_t y) {
 	return abs(-x + 2 * y + 4) < 8;
 }
 Engine::Engine() {
+	init_vulkan();
 	if (hInstance == NULL) {
 		std::fprintf(stderr, "hInstance is NULL\n");
 		std::abort();
@@ -41,15 +43,15 @@ Engine::Engine() {
 	wc.lpszMenuName  = NULL;
 	wc.lpszClassName = CLASS_NAME;
 	wc.hIconSm       = NULL;
-	if(RegisterClassExW(&wc) == 0) {
+	if (RegisterClassExW(&wc) == 0) {
 		std::fprintf(stderr, "RegisterClassExW failed!\n");
 		std::abort();
 	}
 	RECT rect = {0, 0, 1920, 1080};
 	AdjustWindowRectEx(&rect, MY_STYLE, FALSE, MY_EXTENDED_STYLE);
 	HWND hWnd =
-	    CreateWindowExW(MY_EXTENDED_STYLE, CLASS_NAME, L"Conflict of Countries", MY_STYLE, CW_USEDEFAULT,
-	                    CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, hInstance, NULL);
+	    CreateWindowExW(MY_EXTENDED_STYLE, CLASS_NAME, L"Conflict of Countries", MY_STYLE, CW_USEDEFAULT, CW_USEDEFAULT,
+	                    rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, hInstance, NULL);
 	ShowWindow(hWnd, nCmdShow);
 	BITMAPINFO bmi{};
 	bmi.bmiHeader.biSize          = sizeof(BITMAPINFOHEADER);
@@ -69,7 +71,9 @@ Engine::Engine() {
 		for (uint32_t x = 0; x < 1920; x++)
 			raw[1920 * y + x] = line(x, y) ? 0x00000000 : 0x00FFFFFF;
 }
-Engine::~Engine() {}
+Engine::~Engine() {
+	deinit_vulkan();
+}
 void Engine::mainloop() {
 	MSG msg = {};
 	while (GetMessage(&msg, NULL, 0, 0) > 0) {
