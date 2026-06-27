@@ -6,7 +6,7 @@ CC := clang
 CXXFLAGS_BASE := -std=c++20 -Iinclude
 ifneq ($(OS),Windows_NT)
 WL_DIR := $(shell pkg-config --variable=pkgdatadir wayland-protocols)
-WL_PROTOCOLS := $(WL_DIR)/stable/xdg-shell/xdg-shell.xml $(WL_DIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+WL_PROTOCOLS := $(WL_DIR)/stable/xdg-shell/xdg-shell.xml $(WL_DIR)/staging/fractional-scale/fractional-scale-v1.xml $(WL_DIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
 WL_SOURCE := $(WL_PROTOCOLS:$(WL_DIR)/%.xml=.wayland/%.c)
 WL_HEADERS := $(WL_SOURCE:.c=.h)
 WL_OBJ := $(WL_SOURCE:.c=.o)

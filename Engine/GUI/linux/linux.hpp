@@ -1,5 +1,6 @@
 #pragma once
 #include "stable/xdg-shell/xdg-shell.h"
+#include "staging/fractional-scale/fractional-scale-v1.h"
 #include "unstable/xdg-decoration/xdg-decoration-unstable-v1.h"
 #include <cstdint>
 #include <wayland-client-core.h>
@@ -7,20 +8,22 @@
 #include <wayland-client.h>
 #include <wayland-util.h>
 namespace Engine {
-extern struct wl_display*                  display;
-extern struct wl_registry*                 registry;
-extern struct wl_compositor*               compositor;
-extern struct wl_shm*                      shm;
-extern struct xdg_wm_base*                 wm_base;
-extern struct zxdg_decoration_manager_v1*  decoration_manager;
-extern struct wl_surface*                  surface;
-extern struct xdg_surface*                 surface_xdg;
-extern struct xdg_toplevel*                toplevel;
-extern struct zxdg_toplevel_decoration_v1* toplevel_decoration;
-extern bool                                is_running, will_resize;
-extern uint32_t                            old_width, old_height;
-extern uint32_t                            width, height;
-extern uint32_t                            scale;
+extern struct wl_display*                     display;
+extern struct wl_registry*                    registry;
+extern struct wl_compositor*                  compositor;
+extern struct wl_shm*                         shm;
+extern struct xdg_wm_base*                    wm_base;
+extern struct zxdg_decoration_manager_v1*     decoration_manager;
+extern struct wp_fractional_scale_manager_v1* fractional_scale_manager;
+extern struct wl_surface*                     surface;
+extern struct xdg_surface*                    surface_xdg;
+extern struct xdg_toplevel*                   toplevel;
+extern struct zxdg_toplevel_decoration_v1*    toplevel_decoration;
+extern struct wp_fractional_scale_v1*         fractional_scale;
+extern bool                                   is_running, will_resize;
+extern uint32_t                               old_width, old_height;
+extern uint32_t                               width, height;
+extern uint32_t                               scale, scale120;
 // wl_registry
 void registry_global(void* data, struct wl_registry* wl_registry, uint32_t name, const char* interface,
                      uint32_t version);
@@ -52,4 +55,8 @@ inline struct xdg_toplevel_listener toplevel_listener = {.configure        = top
                                                          .close            = toplevel_close,
                                                          .configure_bounds = toplevel_configure_bounds,
                                                          .wm_capabilities  = toplevel_wm_capablities};
+// wp_fractional_scale_v1
+void fractional_scale_preferred_scale(void* data, struct wp_fractional_scale_v1* fractional_scale, uint32_t scale);
+inline struct wp_fractional_scale_v1_listener fractional_scale_listener = {.preferred_scale =
+                                                                               fractional_scale_preferred_scale};
 } // namespace Engine

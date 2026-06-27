@@ -1,6 +1,5 @@
 #include "common/common.hpp"
 #include "coc.hpp"
-#include "linux/linux.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
