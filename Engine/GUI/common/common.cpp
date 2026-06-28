@@ -58,8 +58,12 @@ void               init_vulkan() {
 	instance_info.ppEnabledLayerNames     = layers;
 	instance_info.enabledExtensionCount   = sizeof(instance_extensions) / sizeof(const char*);
 	instance_info.ppEnabledExtensionNames = instance_extensions;
-	if (vkCreateInstance(&instance_info, nullptr, &instance) != VK_SUCCESS)
+	VkResult res;
+	if ((res = vkCreateInstance(&instance_info, nullptr, &instance)) != VK_SUCCESS) {
+		if (res == VK_ERROR_LAYER_NOT_PRESENT)
+			error("Layer not present");
 		error("Failed to create Vulkan instance");
+	}
 	uint32_t physical_device_count = 0;
 	if (vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr) != VK_SUCCESS || physical_device_count == 0)
 		error("No Vulkan devices found");
@@ -310,7 +314,8 @@ surface_format_found:
 			goto present_mode_found;
 		}
 	}
-	error("Failed to find suitable Vulkan surface present mode");
+	present_mode = present_modes[0];
+	delete[] present_modes;
 present_mode_found:
 	vkQueueWaitIdle(queue);
 	current_frame = 0;

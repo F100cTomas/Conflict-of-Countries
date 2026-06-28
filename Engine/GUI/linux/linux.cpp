@@ -33,8 +33,8 @@ uint32_t                               old_width = 0, old_height = 0;
 uint32_t                               width = 1920, height = 1080;
 uint32_t                               scale = 1, scale120 = 120;
 void                                   error(const char* msg) {
-  std::fprintf(stderr, "%s\n", msg);
-  std::abort();
+	std::fprintf(stderr, "%s\n", msg);
+	std::abort();
 }
 Engine::Engine() {
 	if (initialized)

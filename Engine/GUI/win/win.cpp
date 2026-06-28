@@ -3,33 +3,33 @@
 #include "common/common.hpp"
 #include <cstdint>
 #include <cstdio>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
 #include <wchar.h>
 #include <windows.h>
 namespace Engine {
 namespace {
 constexpr const wchar_t CLASS_NAME[]      = L"ConflictOfCountries";
-constexpr DWORD         MY_STYLE          = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+constexpr DWORD         MY_STYLE          = WS_OVERLAPPEDWINDOW;
 constexpr DWORD         MY_EXTENDED_STYLE = WS_EX_APPWINDOW;
 } // namespace
-HINSTANCE      hInstance = NULL;
-int            nCmdShow  = SW_SHOW;
-HBITMAP        hBitmap   = NULL;
-static int32_t abs(int32_t x) {
-	if (x < 0)
-		return -x;
-	return x;
-}
-static bool line(int32_t x, int32_t y) {
-	x -= 1920 / 2;
-	y -= 1080 / 2;
-	return abs(-x + 2 * y + 4) < 8;
+static bool initialized = false;
+HINSTANCE   hInstance   = NULL;
+int         nCmdShow    = SW_SHOW;
+HBITMAP     hBitmap     = NULL;
+uint32_t    old_width = 1920, old_height = 1080;
+uint32_t    width = 1920, height = 1080;
+void        error(const char* msg) {
+	MessageBoxA(NULL, msg, "An error occured.", MB_ICONERROR | MB_OK);
+	std::abort();
 }
 Engine::Engine() {
+	if (initialized)
+		error("Double initialization");
+	initialized = true;
 	init_vulkan();
-	if (hInstance == NULL) {
-		std::fprintf(stderr, "hInstance is NULL\n");
-		std::abort();
-	}
+	if (hInstance == NULL)
+		error("hInstance is NULL");
 	WNDCLASSEXW wc{};
 	wc.cbSize        = sizeof(WNDCLASSEXW);
 	wc.style         = 0;
@@ -43,36 +43,25 @@ Engine::Engine() {
 	wc.lpszMenuName  = NULL;
 	wc.lpszClassName = CLASS_NAME;
 	wc.hIconSm       = NULL;
-	if (RegisterClassExW(&wc) == 0) {
-		std::fprintf(stderr, "RegisterClassExW failed!\n");
-		std::abort();
-	}
+	if (RegisterClassExW(&wc) == 0)
+		error("RegisterClassExW failed!");
 	RECT rect = {0, 0, 1920, 1080};
 	AdjustWindowRectEx(&rect, MY_STYLE, FALSE, MY_EXTENDED_STYLE);
 	HWND hWnd =
 	    CreateWindowExW(MY_EXTENDED_STYLE, CLASS_NAME, L"Conflict of Countries", MY_STYLE, CW_USEDEFAULT, CW_USEDEFAULT,
 	                    rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, hInstance, NULL);
+	VkWin32SurfaceCreateInfoKHR win32_surface_info{};
+	win32_surface_info.sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+	win32_surface_info.hinstance = hInstance;
+	win32_surface_info.hwnd      = hWnd;
+	if (vkCreateWin32SurfaceKHR(instance, &win32_surface_info, nullptr, &surface_khr) != VK_SUCCESS)
+		error("Failed to initialize Vulkan surface");
+	resize(1920, 1080);
 	ShowWindow(hWnd, nCmdShow);
-	BITMAPINFO bmi{};
-	bmi.bmiHeader.biSize          = sizeof(BITMAPINFOHEADER);
-	bmi.bmiHeader.biWidth         = 1920;
-	bmi.bmiHeader.biHeight        = -1080;
-	bmi.bmiHeader.biPlanes        = 1;
-	bmi.bmiHeader.biBitCount      = 32;
-	bmi.bmiHeader.biCompression   = BI_RGB;
-	bmi.bmiHeader.biSizeImage     = 0;
-	bmi.bmiHeader.biXPelsPerMeter = 0;
-	bmi.bmiHeader.biYPelsPerMeter = 0;
-	bmi.bmiHeader.biClrUsed       = 0;
-	bmi.bmiHeader.biClrImportant  = 0;
-	uint32_t* raw;
-	hBitmap = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, reinterpret_cast<void**>(&raw), NULL, 0);
-	for (uint32_t y = 0; y < 1080; y++)
-		for (uint32_t x = 0; x < 1920; x++)
-			raw[1920 * y + x] = line(x, y) ? 0x00000000 : 0x00FFFFFF;
 }
 Engine::~Engine() {
 	deinit_vulkan();
+	initialized = false;
 }
 void Engine::mainloop() {
 	MSG msg = {};
@@ -80,23 +69,24 @@ void Engine::mainloop() {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+	std::exit(0);
 }
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_DESTROY: PostQuitMessage(0); return 0;
-	case WM_PAINT: {
-		PAINTSTRUCT ps;
-		HDC         hdc = BeginPaint(hwnd, &ps);
-		HDC         bm  = CreateCompatibleDC(hdc);
-		HGDIOBJ     old = SelectObject(bm, hBitmap);
-		BitBlt(hdc, 0, 0, 1920, 1080, bm, 0, 0, SRCCOPY);
-		SelectObject(bm, old);
-		DeleteDC(bm);
-		EndPaint(hwnd, &ps);
+	case WM_PAINT: draw(1920, 1080); return 0;
+	case WM_SIZE: {
+		width  = LOWORD(lParam);
+		height = HIWORD(lParam);
+		if (width == old_width || height == old_height)
+			return 0;
+		resize(width, height);
+		old_width  = width;
+		old_height = height;
 	}
 		return 0;
 	default: break;
 	}
-	return DefWindowProc(hwnd, uMsg, wParam, lParam);
-}
+		return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	}
 } // namespace Engine
