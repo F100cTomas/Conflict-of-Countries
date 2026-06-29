@@ -8,22 +8,37 @@
 #include <wayland-client.h>
 #include <wayland-util.h>
 namespace Engine {
-extern struct wl_display*                     display;
-extern struct wl_registry*                    registry;
-extern struct wl_compositor*                  compositor;
-extern struct wl_shm*                         shm;
-extern struct xdg_wm_base*                    wm_base;
+/*
+ * Wayland objects
+ */
+// required (crash if initialization fails)
+extern struct wl_display*    display;
+extern struct wl_registry*   registry;
+extern struct wl_compositor* compositor;
+extern struct xdg_wm_base*   wm_base;
+extern struct wl_seat*       seat;
+extern struct wl_surface*    surface;
+extern struct xdg_surface*   surface_xdg;
+extern struct xdg_toplevel*  toplevel;
+// optional (must check null)
 extern struct zxdg_decoration_manager_v1*     decoration_manager;
-extern struct wp_fractional_scale_manager_v1* fractional_scale_manager;
-extern struct wl_surface*                     surface;
-extern struct xdg_surface*                    surface_xdg;
-extern struct xdg_toplevel*                   toplevel;
 extern struct zxdg_toplevel_decoration_v1*    toplevel_decoration;
+extern struct wp_fractional_scale_manager_v1* fractional_scale_manager;
 extern struct wp_fractional_scale_v1*         fractional_scale;
-extern bool                                   is_running, will_resize;
-extern uint32_t                               old_width, old_height;
-extern uint32_t                               width, height;
-extern uint32_t                               scale, scale120;
+/*
+ * Window information
+ */
+// information for DPI awareness
+extern uint32_t scale, scale120;
+// information for events handled outside callback
+extern bool events_queued;
+extern bool event_close, event_resize;
+// resizing information
+extern uint32_t width, height;
+extern uint32_t width_queued, height_queued;
+/*
+ * Wayland callback Functions (wayland_callbacks.cpp)
+ */
 // wl_registry
 void registry_global(void* data, struct wl_registry* wl_registry, uint32_t name, const char* interface,
                      uint32_t version);

@@ -1,4 +1,3 @@
-UI := GUI
 BUILD := debug
 CXX := clang++
 CC := clang
@@ -17,9 +16,7 @@ LDFLAGS := $(shell pkg-config --libs wayland-client wayland-cursor vulkan)
 else
 EXE := .exe
 CXXFLAGS_LIBS := -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN
-ifneq ($(UI),TerminalUI)
 SUBSYSTEM := -mwindows -municode
-endif
 LDFLAGS := -l:libvulkan-1.dll.a -lkernel32 -luser32 -lgdi32 $(SUBSYSTEM) -static-libgcc -static-libstdc++ -static
 endif
 ifeq ($(BUILD),debug)
@@ -29,9 +26,9 @@ CXXFLAGS := -O3 -DNDEBUG $(CXXFLAGS_BASE)
 endif
 
 ifneq ($(OS),Windows_NT)
-SRC_ENGN := $(shell find Engine/$(UI)/common Engine/$(UI)/linux -name "*.cpp")
+SRC_ENGN := $(shell find Engine/common Engine/linux -name "*.cpp")
 else
-SRC_ENGN := $(shell find Engine/$(UI)/common Engine/$(UI)/win -name "*.cpp")
+SRC_ENGN := $(shell find Engine/common Engine/win -name "*.cpp")
 endif
 OBJ_ENGN := $(SRC_ENGN:%.cpp=.build/%.o)
 DEP_ENGN := $(OBJ_ENGN:.o=.d)
@@ -74,7 +71,7 @@ shader.spv: shader.slang
 -include $(DEP_ENGN)
 .build/Engine/%.o: Engine/%.cpp $(WL_HEADERS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(CXXFLAGS_LIBS) -IEngine/$(UI) -MMD -MP -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(CXXFLAGS_LIBS) -IEngine -MMD -MP -c $< -o $@
 
 -include $(DEP_GAME)
 .build/Game/%.o: Game/%.cpp

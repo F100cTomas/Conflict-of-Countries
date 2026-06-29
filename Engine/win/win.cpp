@@ -74,7 +74,7 @@ void Engine::mainloop() {
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_DESTROY: PostQuitMessage(0); return 0;
-	case WM_PAINT: draw(1920, 1080); return 0;
+	case WM_PAINT: draw(old_width, old_height); return 0;
 	case WM_SIZE: {
 		width  = LOWORD(lParam);
 		height = HIWORD(lParam);
