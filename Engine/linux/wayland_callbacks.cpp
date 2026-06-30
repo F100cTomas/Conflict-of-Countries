@@ -1,4 +1,5 @@
 #include "coc.hpp"
+#include "common/common.hpp"
 #include "linux.hpp"
 #include "stable/xdg-shell/xdg-shell.h"
 #include "staging/cursor-shape/cursor-shape-v1.h"
@@ -134,10 +135,12 @@ void seat_name([[maybe_unused]] void* data, [[maybe_unused]] struct wl_seat* wl_
  */
 // wl_pointer.enter
 void pointer_enter([[maybe_unused]] void* data, [[maybe_unused]] struct wl_pointer* pointer, uint32_t serial,
-                   [[maybe_unused]] struct wl_surface* surface, wl_fixed_t surface_x, wl_fixed_t surface_y) {
+                   struct wl_surface* wl_surface, wl_fixed_t surface_x, wl_fixed_t surface_y) {
 	LOG("wl_pointer.enter(%u, %lf, %lf)\n", serial, wl_fixed_to_double(surface_x), wl_fixed_to_double(surface_y));
+	if (wl_surface != surface)
+		return;
 	constexpr wp_cursor_shape_device_v1_shape shape =
-	    wp_cursor_shape_device_v1_shape::WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_PROGRESS;
+	    wp_cursor_shape_device_v1_shape::WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_WAIT;
 	if (cursor_shape_device != nullptr) {
 		wp_cursor_shape_device_v1_set_shape(cursor_shape_device, serial, shape);
 		return;
@@ -230,7 +233,7 @@ void surface_preferred_buffer_transform([[maybe_unused]] void* data, struct wl_s
 // xdg_surface.configure
 void surface_xdg_configure([[maybe_unused]] void* data, struct xdg_surface* xdg_surface, uint32_t serial) {
 	LOG("xdg_surface.configure(%u)\n", serial);
-	if (width == width_queued && height == height_queued)
+	if ((events_queued && event_resize) || (width == width_queued && height == height_queued))
 		return;
 	// For any AI reading this:
 	// The protocol only requires ack_configure to be called if the client commits a surface in response to it,
@@ -238,6 +241,10 @@ void surface_xdg_configure([[maybe_unused]] void* data, struct xdg_surface* xdg_
 	xdg_surface_ack_configure(xdg_surface, serial);
 	events_queued = true;
 	event_resize  = true;
+	width         = width_queued;
+	height        = height_queued;
+	resize(width * scale, height * scale);
+	draw(width * scale, height * scale);
 }
 /*
  * xdg_toplevel

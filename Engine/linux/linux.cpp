@@ -2,6 +2,7 @@
 #include "coc.hpp"
 #include "common/common.hpp"
 #include "linux/cursor_shape_fallback.hpp"
+#include "linux/decoration_fallback.hpp"
 #include "stable/xdg-shell/xdg-shell.h"
 #include "staging/cursor-shape/cursor-shape-v1.h"
 #include "staging/fractional-scale/fractional-scale-v1.h"
@@ -23,16 +24,17 @@ static bool initialized = false;
  * Wayland objects
  */
 // required (crash if initialization fails)
-struct wl_display*    display     = nullptr;
-struct wl_registry*   registry    = nullptr;
-struct wl_compositor* compositor  = nullptr;
-struct wl_shm*        shm         = nullptr;
-struct xdg_wm_base*   wm_base     = nullptr;
-struct wl_seat*       seat        = nullptr;
-struct wl_pointer*    pointer     = nullptr;
-struct wl_surface*    surface     = nullptr;
-struct xdg_surface*   surface_xdg = nullptr;
-struct xdg_toplevel*  toplevel    = nullptr;
+struct wl_display*    display    = nullptr;
+struct wl_registry*   registry   = nullptr;
+struct wl_compositor* compositor = nullptr;
+struct wl_shm*        shm        = nullptr;
+struct xdg_wm_base*   wm_base    = nullptr;
+struct wl_seat*       seat       = nullptr;
+struct wl_pointer*    pointer    = nullptr;
+struct wl_surface*    surface    = nullptr;
+// if decoration_fallback is not null, these will be null:
+struct xdg_surface*  surface_xdg = nullptr;
+struct xdg_toplevel* toplevel    = nullptr;
 // optional (must check null)
 struct zxdg_decoration_manager_v1*     decoration_manager       = nullptr;
 struct zxdg_toplevel_decoration_v1*    toplevel_decoration      = nullptr;
@@ -41,6 +43,7 @@ struct wp_cursor_shape_device_v1*      cursor_shape_device      = nullptr;
 struct wp_fractional_scale_manager_v1* fractional_scale_manager = nullptr;
 struct wp_fractional_scale_v1*         fractional_scale         = nullptr;
 // fallback for missing extensions
+DecorationFallback*  decoration_fallback   = nullptr;
 CursorShapeFallback* cursor_shape_fallback = nullptr;
 /*
  * Window information
@@ -97,14 +100,22 @@ Engine::Engine() {
 	}
 	// create window
 	surface = wl_compositor_create_surface(compositor);
-	wl_surface_add_listener(surface, &surface_listener, nullptr);
-	surface_xdg = xdg_wm_base_get_xdg_surface(wm_base, surface);
-	xdg_surface_add_listener(surface_xdg, &surface_xdg_listener, nullptr);
-	toplevel = xdg_surface_get_toplevel(surface_xdg);
-	xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
-	xdg_toplevel_set_title(toplevel, "Conflict of Countries");
+	if (surface == nullptr)
+		error("Failed to initialize wl_surface");
 	if (decoration_manager != nullptr) {
+		wl_surface_add_listener(surface, &surface_listener, nullptr);
+		surface_xdg = xdg_wm_base_get_xdg_surface(wm_base, surface);
+		if (surface_xdg == nullptr)
+			error("Failed to initialize xdg_surface");
+		xdg_surface_add_listener(surface_xdg, &surface_xdg_listener, nullptr);
+		toplevel = xdg_surface_get_toplevel(surface_xdg);
+		if (toplevel == nullptr)
+			error("Failed to initialize xdg_toplevel");
+		xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
+		xdg_toplevel_set_title(toplevel, "Conflict of Countries");
 		toplevel_decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(decoration_manager, toplevel);
+	} else {
+		decoration_fallback = new DecorationFallback();
 	}
 	if (fractional_scale_manager != nullptr) {
 		fractional_scale = wp_fractional_scale_manager_v1_get_fractional_scale(fractional_scale_manager, surface);
@@ -125,8 +136,13 @@ Engine::~Engine() {
 	// deinitialize Vulkan
 	deinit_vulkan();
 	// destroy fallback objects
-	if (cursor_shape_fallback != nullptr)
+	if (cursor_shape_fallback != nullptr) {
 		delete cursor_shape_fallback;
+		cursor_shape_fallback = nullptr;
+	}
+	if (decoration_fallback != nullptr) {
+		delete decoration_fallback;
+	}
 	// Wayland deinitialization helper macro
 #define DESTROY_WAYLAND_OBJECT(obj, type) \
 	{                                       \
@@ -146,9 +162,14 @@ Engine::~Engine() {
 		DESTROY_WAYLAND_OBJECT(toplevel_decoration, zxdg_toplevel_decoration_v1);
 	if (decoration_manager != nullptr)
 		DESTROY_WAYLAND_OBJECT(decoration_manager, zxdg_decoration_manager_v1);
+	// destri
+	if (decoration_fallback == nullptr) {
+		DESTROY_WAYLAND_OBJECT(toplevel, xdg_toplevel);
+		DESTROY_WAYLAND_OBJECT(surface_xdg, xdg_surface);
+	} else {
+		decoration_fallback = nullptr;
+	}
 	// destroy required Wayland objects
-	DESTROY_WAYLAND_OBJECT(toplevel, xdg_toplevel);
-	DESTROY_WAYLAND_OBJECT(surface_xdg, xdg_surface);
 	DESTROY_WAYLAND_OBJECT(surface, wl_surface);
 	DESTROY_WAYLAND_OBJECT(pointer, wl_pointer);
 	DESTROY_WAYLAND_OBJECT(seat, wl_seat);
@@ -158,6 +179,7 @@ Engine::~Engine() {
 	DESTROY_WAYLAND_OBJECT(registry, wl_registry);
 	// disconnect from Wayland
 	wl_display_disconnect(display);
+	display = nullptr;
 	// mark deinitiallized
 	initialized = false;
 }
@@ -192,7 +214,6 @@ void Engine::mainloop() {
 			if (cursor_shape_fallback != nullptr && events_buffer[i].data.fd == cursor_shape_fallback->fd()) {
 				uint64_t expirations;
 				read(cursor_shape_fallback->fd(), &expirations, sizeof(expirations));
-				std::fprintf(stderr, "expirations: %ld\n", expirations);
 				for (uint64_t i = 0; i < expirations; i++)
 					cursor_shape_fallback->advance_frame();
 			}
@@ -202,6 +223,8 @@ void Engine::mainloop() {
 		else
 			wl_display_cancel_read(display);
 		wl_display_dispatch_pending(display);
+		if (decoration_fallback != nullptr)
+			decoration_fallback->dispatch();
 		if (events_queued) {
 			events_queued = false;
 			if (event_close) {
@@ -210,10 +233,6 @@ void Engine::mainloop() {
 			}
 			if (event_resize) {
 				event_resize = false;
-				width        = width_queued;
-				height       = height_queued;
-				resize(width * scale, height * scale);
-				draw(width * scale, height * scale);
 			}
 		}
 	}

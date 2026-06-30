@@ -1,5 +1,6 @@
 #pragma once
 #include "cursor_shape_fallback.hpp"
+#include "decoration_fallback.hpp"
 #include "stable/xdg-shell/xdg-shell.h"
 #include "staging/cursor-shape/cursor-shape-v1.h"
 #include "staging/fractional-scale/fractional-scale-v1.h"
@@ -22,8 +23,9 @@ extern struct xdg_wm_base*   wm_base;
 extern struct wl_seat*       seat;
 extern struct wl_pointer*    pointer;
 extern struct wl_surface*    surface;
-extern struct xdg_surface*   surface_xdg;
-extern struct xdg_toplevel*  toplevel;
+// if decoration_fallback is not null, these will be null:
+extern struct xdg_surface*  surface_xdg;
+extern struct xdg_toplevel* toplevel;
 // optional (must check null)
 extern struct zxdg_decoration_manager_v1*     decoration_manager;
 extern struct zxdg_toplevel_decoration_v1*    toplevel_decoration;
@@ -32,6 +34,7 @@ extern struct wp_cursor_shape_device_v1*      cursor_shape_device;
 extern struct wp_fractional_scale_manager_v1* fractional_scale_manager;
 extern struct wp_fractional_scale_v1*         fractional_scale;
 // fallback for missing extensions
+extern DecorationFallback*  decoration_fallback;
 extern CursorShapeFallback* cursor_shape_fallback;
 /*
  * Window information

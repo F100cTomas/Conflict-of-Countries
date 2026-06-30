@@ -11,8 +11,8 @@ WL_HEADERS := $(WL_SOURCE:.c=.h)
 WL_OBJ := $(WL_SOURCE:.c=.o)
 LIB_WL := libwayland-protocols.a
 EXE :=
-CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client vulkan)
-LDFLAGS := $(shell pkg-config --libs wayland-client vulkan)
+CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client vulkan wayland-cursor libdecor-0)
+LDFLAGS := -ldl $(shell pkg-config --libs wayland-client vulkan)
 else
 EXE := .exe
 CXXFLAGS_LIBS := -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN
