@@ -37,7 +37,7 @@ CursorShapeFallback::CursorShapeFallback() {
 	if (wl_cursor_image_get_buffer == nullptr)
 		error("Failed to load wl_cursor_image_get_buffer");
 	// wl_cursor_theme
-	theme = wl_cursor_theme_load("WhiteSur-cursors", 24, shm);
+	theme = wl_cursor_theme_load(nullptr, 24, shm);
 	if (theme == nullptr)
 		error("Failed to load theme");
 	surface = wl_compositor_create_surface(compositor);
