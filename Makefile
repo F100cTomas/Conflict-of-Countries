@@ -5,14 +5,14 @@ CC := clang
 CXXFLAGS_BASE := -std=c++20 -Iinclude
 ifneq ($(OS),Windows_NT)
 WL_DIR := $(shell pkg-config --variable=pkgdatadir wayland-protocols)
-WL_PROTOCOLS := $(WL_DIR)/stable/xdg-shell/xdg-shell.xml $(WL_DIR)/staging/fractional-scale/fractional-scale-v1.xml $(WL_DIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+WL_PROTOCOLS := $(WL_DIR)/stable/xdg-shell/xdg-shell.xml $(WL_DIR)/stable/tablet/tablet-v2.xml $(WL_DIR)/staging/fractional-scale/fractional-scale-v1.xml $(WL_DIR)/staging/cursor-shape/cursor-shape-v1.xml $(WL_DIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
 WL_SOURCE := $(WL_PROTOCOLS:$(WL_DIR)/%.xml=.wayland/%.c)
 WL_HEADERS := $(WL_SOURCE:.c=.h)
 WL_OBJ := $(WL_SOURCE:.c=.o)
 LIB_WL := libwayland-protocols.a
 EXE :=
-CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client wayland-cursor vulkan)
-LDFLAGS := $(shell pkg-config --libs wayland-client wayland-cursor vulkan)
+CXXFLAGS_LIBS := -I.wayland $(shell pkg-config --cflags wayland-client vulkan)
+LDFLAGS := $(shell pkg-config --libs wayland-client vulkan)
 else
 EXE := .exe
 CXXFLAGS_LIBS := -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN
