@@ -2,6 +2,7 @@
 #include "common/common.hpp"
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 #ifdef _WIN32
@@ -10,6 +11,7 @@
 #include <vulkan/vulkan_wayland.h>
 #endif
 namespace Engine {
+void*      data = nullptr;
 VkInstance create_instance() {
 	VkApplicationInfo app_info{};
 	app_info.sType                          = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -180,18 +182,20 @@ VkPipeline create_pipeline(VkDevice device, VkShaderModule shader_module, VkPipe
 	vert_shader_stage_info.pName               = "vertMain";
 	vert_shader_stage_info.pSpecializationInfo = nullptr;
 	VkPipelineShaderStageCreateInfo frag_shader_stage_info{};
-	frag_shader_stage_info.sType                              = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	frag_shader_stage_info.stage                              = VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT;
-	frag_shader_stage_info.module                             = shader_module;
-	frag_shader_stage_info.pName                              = "fragMain";
-	frag_shader_stage_info.pSpecializationInfo                = nullptr;
-	VkPipelineShaderStageCreateInfo      shader_stage_infos[] = {vert_shader_stage_info, frag_shader_stage_info};
-	VkPipelineVertexInputStateCreateInfo vertex_input_state_info{};
+	frag_shader_stage_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	frag_shader_stage_info.stage                         = VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT;
+	frag_shader_stage_info.module                        = shader_module;
+	frag_shader_stage_info.pName                         = "fragMain";
+	frag_shader_stage_info.pSpecializationInfo           = nullptr;
+	VkPipelineShaderStageCreateInfo shader_stage_infos[] = {vert_shader_stage_info, frag_shader_stage_info};
+	VkVertexInputBindingDescription binding_description  = Vertex::get_binding_description();
+	std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = Vertex::get_attribute_descriptions();
+	VkPipelineVertexInputStateCreateInfo             vertex_input_state_info{};
 	vertex_input_state_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertex_input_state_info.vertexBindingDescriptionCount   = 0;
-	vertex_input_state_info.pVertexAttributeDescriptions    = nullptr;
-	vertex_input_state_info.vertexAttributeDescriptionCount = 0;
-	vertex_input_state_info.pVertexAttributeDescriptions    = nullptr;
+	vertex_input_state_info.vertexBindingDescriptionCount   = 1;
+	vertex_input_state_info.pVertexBindingDescriptions      = &binding_description;
+	vertex_input_state_info.vertexAttributeDescriptionCount = attribute_descriptions.size();
+	vertex_input_state_info.pVertexAttributeDescriptions    = attribute_descriptions.data();
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_state_info{};
 	input_assembly_state_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	input_assembly_state_info.topology               = VkPrimitiveTopology::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -242,10 +246,10 @@ VkPipeline create_pipeline(VkDevice device, VkShaderModule shader_module, VkPipe
 	VkDynamicState                   dynamic_states[] = {VkDynamicState::VK_DYNAMIC_STATE_VIEWPORT,
 	                                                     VkDynamicState::VK_DYNAMIC_STATE_SCISSOR};
 	VkPipelineDynamicStateCreateInfo dynamic_state_info{};
-	dynamic_state_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamic_state_info.dynamicStateCount          = sizeof(dynamic_states) / sizeof(VkDynamicState);
-	dynamic_state_info.pDynamicStates             = dynamic_states;
-	VkFormat                      format          = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
+	dynamic_state_info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamic_state_info.dynamicStateCount = sizeof(dynamic_states) / sizeof(VkDynamicState);
+	dynamic_state_info.pDynamicStates    = dynamic_states;
+	VkFormat                      format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
 	VkPipelineRenderingCreateInfo rendering_info{};
 	rendering_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 	rendering_info.viewMask                = 0;
@@ -286,5 +290,47 @@ VkCommandPool create_command_pool(VkDevice device, uint32_t queue_family_index) 
 	if (vkCreateCommandPool(device, &command_pool_info, nullptr, &command_pool) != VK_SUCCESS)
 		error("Failed to create Vulkan command pool");
 	return command_pool;
+}
+VkBuffer create_vertex_buffer(VkPhysicalDevice physical_device, VkDevice device, uint32_t queue_family_index) {
+	VkBufferCreateInfo buffer_info{};
+	buffer_info.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_info.size                  = sizeof(Vertex) * verticies.size();
+	buffer_info.usage                 = VkBufferUsageFlagBits::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	buffer_info.sharingMode           = VkSharingMode::VK_SHARING_MODE_EXCLUSIVE;
+	buffer_info.queueFamilyIndexCount = 1;
+	buffer_info.pQueueFamilyIndices   = &queue_family_index;
+	VkBuffer vertex_buffer;
+	if (vkCreateBuffer(device, &buffer_info, nullptr, &vertex_buffer) != VK_SUCCESS)
+		error("Failed to create Vulkan vertex buffer");
+	VkMemoryRequirements memory_requirements;
+	vkGetBufferMemoryRequirements(device, vertex_buffer, &memory_requirements);
+	VkPhysicalDeviceMemoryProperties memory_properties;
+	vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
+	VkMemoryPropertyFlags memory_property_flags = VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+	                                              | VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	uint32_t index;
+	for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
+		if ((memory_requirements.memoryTypeBits & (1 << i))
+		    && (memory_properties.memoryTypes[i].propertyFlags & memory_property_flags) == memory_property_flags) {
+			index = i;
+			goto index_found;
+		}
+	}
+	error("Could not find Vulkan memory type");
+	return VK_NULL_HANDLE;
+index_found:
+	VkMemoryAllocateInfo memory_allocate_info{};
+	memory_allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memory_allocate_info.allocationSize  = memory_requirements.size;
+	memory_allocate_info.memoryTypeIndex = index;
+	VkDeviceMemory device_memory;
+	if (vkAllocateMemory(device, &memory_allocate_info, nullptr, &device_memory) != VK_SUCCESS)
+		error("Failed to allocate vertex buffer memory");
+	if (vkBindBufferMemory(device, vertex_buffer, device_memory, 0) != VK_SUCCESS)
+		error("Failed to bind vertex buffer memory");
+	if (vkMapMemory(device, device_memory, 0, sizeof(Vertex) * verticies.size(), 0, &data) != VK_SUCCESS)
+		error("Failed to map vertex buffer memory");
+	std::memcpy(data, verticies.data(), sizeof(Vertex) * verticies.size());
+	return vertex_buffer;
 }
 } // namespace Engine

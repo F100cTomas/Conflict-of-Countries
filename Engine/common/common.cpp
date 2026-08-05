@@ -1,7 +1,10 @@
 #include "common/common.hpp"
 #include "coc.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 #ifdef _WIN32
@@ -16,6 +19,7 @@ VkDevice           device                       = VK_NULL_HANDLE;
 VkQueue            queue                        = VK_NULL_HANDLE;
 VkPipeline         pipeline                     = VK_NULL_HANDLE;
 VkCommandPool      command_pool                 = VK_NULL_HANDLE;
+VkBuffer           vertex_buffer                = VK_NULL_HANDLE;
 VkSurfaceKHR       surface_khr                  = VK_NULL_HANDLE;
 VkSwapchainKHR     swapchain_khr                = VK_NULL_HANDLE;
 Synchronization    synchronization[frame_count] = {{}, {}};
@@ -35,6 +39,7 @@ void               init_vulkan() {
   VkPipelineLayout pipeline_layout = create_pipeline_layout(device);
   pipeline                         = create_pipeline(device, shader_module, pipeline_layout);
   command_pool                     = create_command_pool(device, queue_family_index);
+  vertex_buffer                    = create_vertex_buffer(physical_device, device, queue_family_index);
   vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
   vkDestroyShaderModule(device, shader_module, nullptr);
 }
@@ -164,6 +169,65 @@ void resize(uint32_t width, uint32_t height) {
 			error("Failed to create Vulkan fence");
 	}
 }
+void set_angle(float angle_degrees) {
+		// 1. Convert the input degree angle to radians
+		const float angle_radians = angle_degrees * (M_PI / 180.0f);
+
+		// --- Determine the Centroid (Pivot Point) ---
+		// This centers the rotation, preventing the triangle from moving away from the origin.
+		float avg_x = 0.0f;
+		float avg_y = 0.0f;
+		for (const auto& v : verticies) {
+				avg_x += v.pos.x;
+				avg_y += v.pos.y;
+		}
+		// Assuming 3 vertices
+		const float pivot_x = avg_x / 3.0f;
+		const float pivot_y = avg_y / 3.0f;
+
+		// Create a temporary vector to hold the new rotated state
+		std::vector<Vertex> new_vertices;
+		new_vertices.reserve(verticies.size());
+
+		float cos_a = std::cos(angle_radians);
+		float sin_a = std::sin(angle_radians);
+
+		// 2. Apply the rotation transformation to every vertex
+		for (const auto& v : verticies) {
+				float x = v.pos.x;
+				float y = v.pos.y;
+
+				/*
+				 * Rotation around an arbitrary pivot (pivot_x, pivot_y):
+				 * 1. Translate: (x - p_x, y - p_y)
+				 * 2. Rotate: Apply standard matrix rotation
+				 * 3. Translate back: Add (p_x, p_y)
+				 */
+
+				// 1. Translation to origin
+				float x_translated = x - pivot_x;
+				float y_translated = y - pivot_y;
+
+				// 2. Rotation calculation
+				float x_rotated = x_translated * cos_a - y_translated * sin_a;
+				float y_rotated = x_translated * sin_a + y_translated * cos_a;
+
+				// 3. Translation back
+				float final_x = x_rotated + pivot_x;
+				float final_y = y_rotated + pivot_y;
+
+				Vertex new_v;
+				new_v.pos = {final_x, final_y};
+				// The color/normal is preserved during rotation
+				new_v.color = v.color;
+
+				new_vertices.push_back(new_v);
+		}
+
+		// 3. Update the internal state
+		verticies = new_vertices;
+		std::memcpy(data, verticies.data(), sizeof(Vertex) * verticies.size());
+}
 void draw(uint32_t width, uint32_t height) {
 	if (vkWaitForFences(device, 1, &synchronization[current_frame].draw_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 		error("Failed to wait for Vulkan fences");
@@ -238,8 +302,6 @@ void draw(uint32_t width, uint32_t height) {
 	rendering_info.pDepthAttachment     = nullptr;
 	rendering_info.pStencilAttachment   = nullptr;
 	vkCmdBeginRendering(synchronization[current_frame].command_buffer, &rendering_info);
-	vkCmdBindPipeline(synchronization[current_frame].command_buffer, VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                  pipeline);
 	VkViewport viewport{};
 	viewport.x        = 0.0f;
 	viewport.y        = 0.0f;
@@ -252,7 +314,11 @@ void draw(uint32_t width, uint32_t height) {
 	scissor.offset = VkOffset2D{.x = 0, .y = 0};
 	scissor.extent = VkExtent2D{.width = width, .height = height};
 	vkCmdSetScissor(synchronization[current_frame].command_buffer, 0, 1, &scissor);
-	vkCmdDraw(synchronization[current_frame].command_buffer, 3, 1, 0, 0);
+	vkCmdBindPipeline(synchronization[current_frame].command_buffer, VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                  pipeline);
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(synchronization[current_frame].command_buffer, 0, 1, &vertex_buffer, &offset);
+	vkCmdDraw(synchronization[current_frame].command_buffer, verticies.size(), 1, 0, 0);
 	vkCmdEndRendering(synchronization[current_frame].command_buffer);
 	VkImageMemoryBarrier2 barrier2{};
 	barrier2.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;

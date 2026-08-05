@@ -12,6 +12,8 @@
 #include <cstdlib>
 #include <sys/epoll.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_wayland.h>
@@ -57,12 +59,12 @@ bool events_queued = false;
 bool event_close = false, event_resize = false;
 // resizing information
 uint32_t width = 0, height = 0;
-uint32_t width_queued = 1920, height_queued = 1080;
+uint32_t width_queued = 1080, height_queued = 1080;
 /*
  * Public Engine functions
  */
 // hard crash
-void error(const char* msg) {
+[[noreturn]] void error(const char* msg) {
 	std::fprintf(stderr, "%s\n", msg);
 	std::abort();
 }
@@ -193,6 +195,18 @@ void Engine::mainloop() {
 		if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, wayland_fd, &event) != 0)
 			error("epoll_ctl failed");
 	}
+	const int timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+	if (timer_fd == -1)
+		error("Failed to create timer");
+	{
+		epoll_event event = {.events = EPOLLIN, .data = {.fd = timer_fd}};
+		if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, timer_fd, &event) != 0)
+			error("epoll_ctl failed");
+		itimerspec spec = {.it_interval = {.tv_sec = 0, .tv_nsec = 16'666'667},
+		                   .it_value    = {.tv_sec = 0, .tv_nsec = 16'666'667}};
+		if (timerfd_settime(timer_fd, 0, &spec, nullptr) != 0)
+			error("timerfd_settime failed");
+	}
 	while (true) {
 		while (wl_display_prepare_read(display) != 0)
 			wl_display_dispatch_pending(display);
@@ -209,6 +223,14 @@ void Engine::mainloop() {
 		for (int i = 0; i < n; i++) {
 			if (events_buffer[i].data.fd == wayland_fd) {
 				wayland_ready = true;
+				continue;
+			}
+			if (events_buffer[i].data.fd == timer_fd) {
+				uint64_t expirations;
+				read(timer_fd, &expirations, sizeof(expirations));
+				for (uint64_t i = 0; i < expirations; i++)
+					;
+				// draw(width * scale, height * scale);
 				continue;
 			}
 			if (cursor_shape_fallback != nullptr && events_buffer[i].data.fd == cursor_shape_fallback->fd()) {

@@ -7,7 +7,7 @@ extern int       nCmdShow;
 } // namespace Engine
 #endif
 namespace Engine {
-void error(const char* msg);
+[[noreturn]] void error(const char* msg);
 class Engine {
 public:
 	Engine();
